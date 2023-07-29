@@ -199,9 +199,15 @@ class GaussianProcessOptimization(object):
         context = np.atleast_2d(context)
         num_contexts = context.shape[1]
 
-        x2 = np.empty((x.shape[0], x.shape[1] + num_contexts), dtype=float)
+        x2 = np.empty((x.shape[0], x.shape[1] + num_contexts), dtype=float) # original implementation
+        # the following modification resolves the issue of x.shape[1] 
+        # being out of bounds for x being [1,]
+        # x2 = np.empty((x.shape[0], 1 + num_contexts), dtype=float) # working with simple building model
         x2[:, :x.shape[1]] = x
         x2[:, x.shape[1]:] = context
+
+        # x2[:, :5] = x
+        # x2[:, 5:] = context
         return x2
 
     def _add_data_point(self, gp, x, y, context=None):
@@ -223,7 +229,6 @@ class GaussianProcessOptimization(object):
         """
         if context is not None:
             x = self._add_context(x, context)
-
         gp.set_XY(np.vstack([gp.X, x]),
                   np.vstack([gp.Y, y]))
 
@@ -467,7 +472,7 @@ class SafeOpt(GaussianProcessOptimization):
         for i in range(len(self.gps)):
             # Evaluate acquisition function
             mean, var = self.gps[i].predict_noiseless(self.inputs)
-
+            
             mean = mean.squeeze()
             std_dev = np.sqrt(var.squeeze())
 
@@ -529,7 +534,6 @@ class SafeOpt(GaussianProcessOptimization):
         else:
             # skip points in M, they will already be evaluated
             s = np.logical_and(self.S, ~self.M)
-
             # Remove points with a variance that is too small
             s[s] = (np.max((u[s, :] - l[s, :]) / self.scaling, axis=1) >
                     max_var)
@@ -583,7 +587,7 @@ class SafeOpt(GaussianProcessOptimization):
 
                     # Add safe point with its max possible value to the gp
                     self._add_data_point(gp=gp,
-                                         x=self.parameter_set[s, :][index, :],
+                                         x=self.parameter_set[s, :][index, :, None].T,
                                          y=u[s, i][index],
                                          context=self.context)
 
@@ -708,6 +712,7 @@ class SafeOpt(GaussianProcessOptimization):
         l = self.Q[self.S, 0]
 
         max_id = np.argmax(l)
+
         return (self.inputs[self.S, :][max_id, :-self.num_contexts or None],
                 l[max_id])
 
